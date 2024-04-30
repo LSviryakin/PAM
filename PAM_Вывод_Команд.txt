@@ -1,0 +1,80 @@
+$ vagrant ssh
+[vagrant@pam ~]$ sudo -i
+[root@pam ~]# useradd otusadm && sudo useradd otus
+[root@pam ~]# echo "123456" | passwd --stdin otusadm && echo "123456" | passwd --stdin otus
+Changing password for user otusadm.
+passwd: all authentication tokens updated successfully.
+Changing password for user otus.
+passwd: all authentication tokens updated successfully.
+[root@pam ~]# usermod otusadm -a -G admin && usermod root -a -G admin && usermod vagrant -a -G admin
+[root@pam ~]#
+
+$ ssh otus@192.168.11.101
+The authenticity of host '192.168.11.101 (192.168.11.101)' can't be established.
+ED25519 key fingerprint is SHA256:M5e+P5M+pyzqTFNCxF/iIS7h1rctvUf/0trdlQOaNWU.
+This key is not known by any other names.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added '192.168.11.101' (ED25519) to the list of known hosts.
+otus@192.168.11.101's password:
+[otus@pam ~]$ whoami
+otus
+[otus@pam ~]$ exit
+logout
+Connection to 192.168.11.101 closed.
+$ ssh otusadm@192.168.11.101
+otusadm@192.168.11.101's password:
+[otusadm@pam ~]$ whoami
+otusadm
+[otusadm@pam ~]$ exit
+logout
+Connection to 192.168.11.101 closed.
+
+[root@pam ~]# cat /etc/group | grep admin
+printadmin:x:997:
+admin:x:1002:test_user,otusadm,root,vagrant
+[root@pam ~]# touch /usr/local/bin/login.sh
+[root@pam ~]# vi /usr/local/bin/login.sh
+[root@pam ~]# cat /usr/local/bin/login.sh
+#!/bin/bash
+if [ $(date +%a) = "Sat" ] || [ $(date +%a) = "Sun" ]; then
+if getent group admin | grep -qw "$PAM_USER"; then
+exit 0
+else
+exit 1
+fi
+else
+exit 0
+fi
+[root@pam ~]# chmod +x /usr/local/bin/login.sh
+[root@pam ~]# vi /etc/pam.d/sshd
+[root@pam ~]# cat /etc/pam.d/sshd
+#%PAM-1.0
+auth  required  pam_script.so
+auth       required     pam_sepermit.so
+auth       substack     password-auth
+auth       include      postlogin
+auth required pam_exec.so debug /usr/local/bin/login.sh
+# Used with polkit to reauthorize users in remote sessions
+-auth      optional     pam_reauthorize.so prepare
+account    required     pam_nologin.so
+account    include      password-auth
+password   include      password-auth
+# pam_selinux.so close should be the first session rule
+session    required     pam_selinux.so close
+session    required     pam_loginuid.so
+# pam_selinux.so open should only be followed by sessions to be executed in the user context
+session    required     pam_selinux.so open env_params
+session    required     pam_namespace.so
+session    optional     pam_keyinit.so force revoke
+session    include      password-auth
+session    include      postlogin
+# Used with polkit to reauthorize users in remote sessions
+-session   optional     pam_reauthorize.so prepare
+[root@pam ~]# sudo date 082712302022.00
+Sat Aug 27 12:30:00 UTC 2022
+[root@pam ~]#
+
+$ ssh otus@192.168.11.101
+otus@192.168.11.101's password:
+Permission denied, please try again.
+otus@192.168.11.101's password:
